@@ -3,6 +3,7 @@ import {
   isPendingToday,
   weekProgressLabel,
 } from "./streak-logic.js";
+import { initAuth } from "./clerk-auth.js";
 
 const STORAGE_KEY = "streak-counter-data";
 
@@ -21,18 +22,13 @@ const enableNotifBtn = document.getElementById("enable-notif-btn");
 const testNotifBtn = document.getElementById("test-notif-btn");
 const notifStatus = document.getElementById("notif-status");
 
-function loadStreaks() {
+function loadLocalStreaks() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
   }
-}
-
-function saveStreaks(streaks) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(streaks));
-  syncToServer(streaks);
 }
 
 function uuid() {
@@ -55,67 +51,6 @@ function toggleToday(streak) {
   const idx = streak.completions.indexOf(key);
   if (idx >= 0) streak.completions.splice(idx, 1);
   else streak.completions.push(key);
-}
-
-let streaks = loadStreaks();
-
-function render() {
-  listEl.innerHTML = "";
-
-  if (streaks.length === 0) {
-    const empty = document.createElement("div");
-    empty.className = "empty-state";
-    empty.textContent = "No streaks yet — tap + to add one.";
-    listEl.appendChild(empty);
-    return;
-  }
-
-  for (const streak of streaks) {
-    const pending = isPendingToday(streak);
-    const count = computeStreakCount(streak);
-
-    const card = document.createElement("div");
-    card.className = "streak-card";
-
-    const toggle = document.createElement("button");
-    toggle.className = "streak-toggle" + (pending ? "" : " done");
-    toggle.textContent = pending ? "" : "✓";
-    toggle.setAttribute("aria-label", pending ? "Mark done" : "Mark not done");
-    toggle.addEventListener("click", () => {
-      const wasPending = pending;
-      toggleToday(streak);
-      saveStreaks(streaks);
-      render();
-      if (wasPending) celebrate();
-    });
-
-    const main = document.createElement("div");
-    main.className = "streak-main";
-    const nameEl = document.createElement("div");
-    nameEl.className = "streak-name";
-    nameEl.textContent = `${streak.emoji} ${streak.name}`;
-    const metaEl = document.createElement("div");
-    metaEl.className = "streak-meta";
-    metaEl.textContent = weekProgressLabel(streak);
-    main.append(nameEl, metaEl);
-
-    const countEl = document.createElement("div");
-    countEl.className = "streak-count";
-    countEl.textContent = `🔥 ${count}`;
-
-    const delBtn = document.createElement("button");
-    delBtn.className = "streak-delete";
-    delBtn.textContent = "✕";
-    delBtn.setAttribute("aria-label", "Delete streak");
-    delBtn.addEventListener("click", () => {
-      streaks = streaks.filter((s) => s.id !== streak.id);
-      saveStreaks(streaks);
-      render();
-    });
-
-    card.append(toggle, main, countEl, delBtn);
-    listEl.appendChild(card);
-  }
 }
 
 // ---------- Celebration (fires when a streak is marked done) ----------
@@ -205,146 +140,232 @@ async function celebrate() {
   }
 }
 
-// ---------- Add streak dialog ----------
+async function main() {
+  const { getToken } = await initAuth();
 
-addBtn.addEventListener("click", () => {
-  addForm.reset();
-  targetLabel.classList.add("hidden");
-  dialog.showModal();
-});
-
-cancelAddBtn.addEventListener("click", () => dialog.close());
-
-typeSelect.addEventListener("change", () => {
-  targetLabel.classList.toggle("hidden", typeSelect.value !== "weekly_n");
-});
-
-addForm.addEventListener("submit", (e) => {
-  const name = nameInput.value.trim();
-  if (!name) {
-    e.preventDefault();
-    return;
+  async function authFetch(url, options = {}) {
+    const token = await getToken();
+    const headers = { ...options.headers };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    return fetch(url, { ...options, headers });
   }
-  const streak = {
-    id: uuid(),
-    name,
-    emoji: emojiInput.value.trim() || "🔥",
-    type: typeSelect.value,
-    target: typeSelect.value === "weekly_n" ? Number(targetInput.value) || 3 : undefined,
-    completions: [],
-    createdAt: new Date().toISOString(),
-  };
-  streaks.push(streak);
-  saveStreaks(streaks);
-  render();
-});
 
-render();
+  async function syncToServer(currentStreaks) {
+    try {
+      await authFetch("/api/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ streaks: currentStreaks }),
+      });
+    } catch {
+      // Offline or server not running — local data is still the source of truth for the UI.
+    }
+  }
 
-// ---------- iOS install banner ----------
+  function saveStreaks(currentStreaks) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(currentStreaks));
+    syncToServer(currentStreaks);
+  }
 
-const isStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
-const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-
-if (isIOS && !isStandalone) {
-  iosBanner.classList.remove("hidden");
-}
-
-// ---------- Service worker + push notifications ----------
-
-let swRegistration = null;
-
-async function registerServiceWorker() {
-  if (!("serviceWorker" in navigator)) return null;
-  swRegistration = await navigator.serviceWorker.register("sw.js");
-  return swRegistration;
-}
-
-function urlBase64ToUint8Array(base64String) {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const rawData = atob(base64);
-  return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
-}
-
-async function syncToServer(currentStreaks) {
+  // The server (per signed-in user) is the source of truth, since the same
+  // account may be used from more than one device; localStorage is just a
+  // fast local cache, and the fallback if the initial fetch fails (offline).
+  let streaks = loadLocalStreaks();
   try {
-    await fetch("/api/sync", {
+    const res = await authFetch("/api/sync");
+    const data = await res.json();
+    if (Array.isArray(data.streaks)) {
+      streaks = data.streaks;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(streaks));
+    }
+  } catch {
+    // Offline on first load — proceed with whatever's cached locally.
+  }
+
+  function render() {
+    listEl.innerHTML = "";
+
+    if (streaks.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "empty-state";
+      empty.textContent = "No streaks yet — tap + to add one.";
+      listEl.appendChild(empty);
+      return;
+    }
+
+    for (const streak of streaks) {
+      const pending = isPendingToday(streak);
+      const count = computeStreakCount(streak);
+
+      const card = document.createElement("div");
+      card.className = "streak-card";
+
+      const toggle = document.createElement("button");
+      toggle.className = "streak-toggle" + (pending ? "" : " done");
+      toggle.textContent = pending ? "" : "✓";
+      toggle.setAttribute("aria-label", pending ? "Mark done" : "Mark not done");
+      toggle.addEventListener("click", () => {
+        const wasPending = pending;
+        toggleToday(streak);
+        saveStreaks(streaks);
+        render();
+        if (wasPending) celebrate();
+      });
+
+      const main = document.createElement("div");
+      main.className = "streak-main";
+      const nameEl = document.createElement("div");
+      nameEl.className = "streak-name";
+      nameEl.textContent = `${streak.emoji} ${streak.name}`;
+      const metaEl = document.createElement("div");
+      metaEl.className = "streak-meta";
+      metaEl.textContent = weekProgressLabel(streak);
+      main.append(nameEl, metaEl);
+
+      const countEl = document.createElement("div");
+      countEl.className = "streak-count";
+      countEl.textContent = `🔥 ${count}`;
+
+      const delBtn = document.createElement("button");
+      delBtn.className = "streak-delete";
+      delBtn.textContent = "✕";
+      delBtn.setAttribute("aria-label", "Delete streak");
+      delBtn.addEventListener("click", () => {
+        streaks = streaks.filter((s) => s.id !== streak.id);
+        saveStreaks(streaks);
+        render();
+      });
+
+      card.append(toggle, main, countEl, delBtn);
+      listEl.appendChild(card);
+    }
+  }
+
+  // ---------- Add streak dialog ----------
+
+  addBtn.addEventListener("click", () => {
+    addForm.reset();
+    targetLabel.classList.add("hidden");
+    dialog.showModal();
+  });
+
+  cancelAddBtn.addEventListener("click", () => dialog.close());
+
+  typeSelect.addEventListener("change", () => {
+    targetLabel.classList.toggle("hidden", typeSelect.value !== "weekly_n");
+  });
+
+  addForm.addEventListener("submit", (e) => {
+    const name = nameInput.value.trim();
+    if (!name) {
+      e.preventDefault();
+      return;
+    }
+    const streak = {
+      id: uuid(),
+      name,
+      emoji: emojiInput.value.trim() || "🔥",
+      type: typeSelect.value,
+      target: typeSelect.value === "weekly_n" ? Number(targetInput.value) || 3 : undefined,
+      completions: [],
+      createdAt: new Date().toISOString(),
+    };
+    streaks.push(streak);
+    saveStreaks(streaks);
+    render();
+  });
+
+  render();
+
+  // ---------- iOS install banner ----------
+
+  const isStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+
+  if (isIOS && !isStandalone) {
+    iosBanner.classList.remove("hidden");
+  }
+
+  // ---------- Service worker + push notifications ----------
+
+  let swRegistration = null;
+
+  async function registerServiceWorker() {
+    if (!("serviceWorker" in navigator)) return null;
+    swRegistration = await navigator.serviceWorker.register("sw.js");
+    return swRegistration;
+  }
+
+  function urlBase64ToUint8Array(base64String) {
+    const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+    const rawData = atob(base64);
+    return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
+  }
+
+  function updateNotifUI() {
+    const supported = isStandalone && "PushManager" in window && "Notification" in window;
+    if (!supported) {
+      enableNotifBtn.classList.add("hidden");
+      testNotifBtn.classList.add("hidden");
+      notifStatus.textContent = isIOS
+        ? "Add this app to your Home Screen first, then open it from there to enable reminders."
+        : "";
+      return;
+    }
+    if (Notification.permission === "granted") {
+      enableNotifBtn.classList.add("hidden");
+      testNotifBtn.classList.remove("hidden");
+      notifStatus.textContent = "Reminders are enabled.";
+    } else {
+      enableNotifBtn.classList.remove("hidden");
+      testNotifBtn.classList.add("hidden");
+      notifStatus.textContent = "Enable reminders to get notified about pending streaks.";
+    }
+  }
+
+  async function enableNotifications() {
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      notifStatus.textContent = "Notifications permission was not granted.";
+      return;
+    }
+
+    const reg = swRegistration || (await registerServiceWorker());
+    const keyRes = await fetch("/api/vapid-public-key");
+    const { publicKey } = await keyRes.json();
+
+    const subscription = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(publicKey),
+    });
+
+    await authFetch("/api/subscribe", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ streaks: currentStreaks }),
+      body: JSON.stringify({ subscription }),
     });
-  } catch {
-    // Offline or server not running — local data is still the source of truth for the UI.
-  }
-}
 
-function updateNotifUI() {
-  const supported = isStandalone && "PushManager" in window && "Notification" in window;
-  if (!supported) {
-    enableNotifBtn.classList.add("hidden");
-    testNotifBtn.classList.add("hidden");
-    notifStatus.textContent = isIOS
-      ? "Add this app to your Home Screen first, then open it from there to enable reminders."
-      : "";
-    return;
-  }
-  if (Notification.permission === "granted") {
-    enableNotifBtn.classList.add("hidden");
-    testNotifBtn.classList.remove("hidden");
-    notifStatus.textContent = "Reminders are enabled.";
-  } else {
-    enableNotifBtn.classList.remove("hidden");
-    testNotifBtn.classList.add("hidden");
-    notifStatus.textContent = "Enable reminders to get notified about pending streaks.";
-  }
-}
-
-async function enableNotifications() {
-  const permission = await Notification.requestPermission();
-  if (permission !== "granted") {
-    notifStatus.textContent = "Notifications permission was not granted.";
-    return;
+    updateNotifUI();
   }
 
-  const reg = swRegistration || (await registerServiceWorker());
-  const keyRes = await fetch("/api/vapid-public-key");
-  const { publicKey } = await keyRes.json();
-
-  const subscription = await reg.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(publicKey),
+  enableNotifBtn.addEventListener("click", () => {
+    enableNotifications().catch((err) => {
+      notifStatus.textContent = `Could not enable notifications: ${err.message}`;
+    });
   });
 
-  await fetch("/api/subscribe", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ subscription }),
+  testNotifBtn.addEventListener("click", async () => {
+    notifStatus.textContent = "Sending test notification…";
+    try {
+      await authFetch("/api/test-notification", { method: "POST" });
+      notifStatus.textContent = "Test notification sent (if any streak is pending today).";
+    } catch (err) {
+      notifStatus.textContent = `Failed to send test notification: ${err.message}`;
+    }
   });
 
-  await syncToServer(streaks);
-  updateNotifUI();
+  registerServiceWorker().finally(updateNotifUI);
 }
 
-enableNotifBtn.addEventListener("click", () => {
-  enableNotifications().catch((err) => {
-    notifStatus.textContent = `Could not enable notifications: ${err.message}`;
-  });
-});
-
-testNotifBtn.addEventListener("click", async () => {
-  notifStatus.textContent = "Sending test notification…";
-  try {
-    await fetch("/api/test-notification", { method: "POST" });
-    notifStatus.textContent = "Test notification sent (if any streak is pending today).";
-  } catch (err) {
-    notifStatus.textContent = `Failed to send test notification: ${err.message}`;
-  }
-});
-
-// Note: deliberately not syncing to the server here. This runs on every load,
-// including a fresh/empty localStorage (new browser profile, cleared site data),
-// which would otherwise overwrite the server's copy with an empty streak list.
-// The server's copy is kept current via saveStreaks() on every mutation, and via
-// the explicit sync inside enableNotifications() when reminders are first turned on.
-registerServiceWorker().finally(updateNotifUI);
+main();

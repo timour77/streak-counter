@@ -1,5 +1,5 @@
 import webpush from "web-push";
-import { loadStore, saveStore } from "./store.js";
+import { loadUserStore, saveUserStore, getAllUserIds } from "./store.js";
 import { isPendingToday } from "../public/streak-logic.js";
 
 let vapidConfigured = false;
@@ -16,7 +16,7 @@ function ensureVapid() {
   vapidConfigured = true;
 }
 
-async function pushToAll(store, payload) {
+async function pushToAll(userId, store, payload) {
   const stillValid = [];
   for (const sub of store.subscriptions) {
     try {
@@ -28,12 +28,12 @@ async function pushToAll(store, payload) {
     }
   }
   store.subscriptions = stillValid;
-  await saveStore(store);
+  await saveUserStore(userId, store);
 }
 
-export async function sendReminders({ force = false } = {}) {
+export async function sendReminderForUser(userId, { force = false } = {}) {
   ensureVapid();
-  const store = await loadStore();
+  const store = await loadUserStore(userId);
   if (store.subscriptions.length === 0) return;
 
   const pending = (store.streaks || []).filter((s) => isPendingToday(s));
@@ -41,6 +41,7 @@ export async function sendReminders({ force = false } = {}) {
   if (pending.length === 0) {
     if (!force) return;
     await pushToAll(
+      userId,
       store,
       JSON.stringify({
         title: "Test notification",
@@ -51,10 +52,19 @@ export async function sendReminders({ force = false } = {}) {
   }
 
   await pushToAll(
+    userId,
     store,
     JSON.stringify({
       title: pending.length === 1 ? "1 streak needs you today" : `${pending.length} streaks need you today`,
       body: pending.map((s) => `${s.emoji} ${s.name}`).join("\n"),
     })
   );
+}
+
+// Used by the daily cron job — sweeps every known user, not just one.
+export async function sendRemindersForAllUsers() {
+  const userIds = await getAllUserIds();
+  for (const userId of userIds) {
+    await sendReminderForUser(userId);
+  }
 }

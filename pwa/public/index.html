@@ -16,7 +16,14 @@
 <body>
 <header class="topbar">
   <h1>🔥 Streaks</h1>
+  <div id="user-button-container"></div>
 </header>
+
+<div id="auth-loading" class="auth-loading">Loading…</div>
+
+<div id="sign-in-container" class="sign-in-container hidden"></div>
+
+<div id="app-content" class="hidden">
 
 <div id="ios-install-banner" class="banner hidden">
   Install this app to enable notifications: tap <strong>Share</strong> ⬆️ then
@@ -62,6 +69,8 @@
     </div>
   </form>
 </dialog>
+
+</div>
 
 <script type="module" src="app.js"></script>
 </body>

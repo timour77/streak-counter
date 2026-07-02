@@ -1,4 +1,4 @@
-import { sendReminders } from "../lib/reminders.js";
+import { sendRemindersForAllUsers } from "../lib/reminders.js";
 
 // Triggered daily by Vercel Cron (see vercel.json). Vercel signs the request
 // with an Authorization: Bearer <CRON_SECRET> header when CRON_SECRET is set,
@@ -11,6 +11,6 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  await sendReminders();
+  await sendRemindersForAllUsers();
   res.status(200).json({ ok: true });
 }
