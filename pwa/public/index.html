@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#1c1c1e" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Streaks" />
+<title>Streaks</title>
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<link rel="icon" href="icons/icon-192.png" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<header class="topbar">
+  <h1>🔥 Streaks</h1>
+</header>
+
+<div id="ios-install-banner" class="banner hidden">
+  Install this app to enable notifications: tap <strong>Share</strong> ⬆️ then
+  <strong>Add to Home Screen</strong>, then open it from your Home Screen.
+</div>
+
+<main id="streak-list" class="streak-list"></main>
+
+<section id="notif-section" class="notif-section">
+  <button id="enable-notif-btn" class="secondary-btn">Enable reminders</button>
+  <button id="test-notif-btn" class="secondary-btn hidden">Send test notification</button>
+  <p id="notif-status" class="notif-status"></p>
+</section>
+
+<button id="add-streak-btn" class="fab" aria-label="Add streak">+</button>
+
+<dialog id="add-dialog">
+  <form id="add-form" method="dialog">
+    <h2>New Streak</h2>
+    <label>
+      Name
+      <input id="streak-name" type="text" placeholder="e.g. Meditate" required maxlength="40" />
+    </label>
+    <label>
+      Emoji
+      <input id="streak-emoji" type="text" placeholder="🔥" maxlength="4" />
+    </label>
+    <label>
+      Frequency
+      <select id="streak-type">
+        <option value="daily">Daily</option>
+        <option value="weekly">Weekly (once a week)</option>
+        <option value="weekly_n">N times per week</option>
+      </select>
+    </label>
+    <label id="target-label" class="hidden">
+      Times per week
+      <input id="streak-target" type="number" min="2" max="6" value="3" />
+    </label>
+    <div class="dialog-actions">
+      <button type="button" id="cancel-add-btn" class="secondary-btn">Cancel</button>
+      <button type="submit" class="primary-btn">Add</button>
+    </div>
+  </form>
+</dialog>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

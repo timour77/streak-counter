@@ -1,0 +1,252 @@
+:root {
+  color-scheme: dark;
+  --bg: #1c1c1e;
+  --card: #2c2c2e;
+  --text: #ffffff;
+  --text-dim: #9a9a9e;
+  --accent: #ff9500;
+  --danger: #ff453a;
+  --ok: #32d74b;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+body {
+  padding-bottom: 6rem;
+}
+
+.topbar {
+  padding: env(safe-area-inset-top, 1rem) 1.25rem 0.5rem;
+}
+
+.topbar h1 {
+  font-size: 1.5rem;
+  margin: 0.75rem 0;
+}
+
+.banner {
+  margin: 0 1.25rem 1rem;
+  padding: 0.75rem 1rem;
+  background: #3a2f1c;
+  border: 1px solid #5c4a24;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.banner.hidden,
+.hidden {
+  display: none !important;
+}
+
+.streak-list {
+  padding: 0 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.streak-card {
+  background: var(--card);
+  border-radius: 14px;
+  padding: 0.9rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.streak-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.streak-name {
+  font-size: 1.05rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.streak-meta {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  margin-top: 0.15rem;
+}
+
+.streak-count {
+  font-weight: 700;
+  color: var(--accent);
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+.streak-toggle {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: none;
+  font-size: 1.3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #3a3a3c;
+  color: var(--text-dim);
+}
+
+.streak-toggle.done {
+  background: var(--ok);
+  color: #06280f;
+}
+
+.streak-delete {
+  border: none;
+  background: transparent;
+  color: var(--danger);
+  font-size: 1.1rem;
+  padding: 0.25rem 0.4rem;
+}
+
+.empty-state {
+  color: var(--text-dim);
+  text-align: center;
+  padding: 2.5rem 1rem;
+}
+
+.notif-section {
+  padding: 1.5rem 1.25rem 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.notif-status {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  text-align: center;
+  margin: 0;
+}
+
+.secondary-btn {
+  background: #3a3a3c;
+  color: var(--text);
+  border: none;
+  border-radius: 10px;
+  padding: 0.65rem 1.1rem;
+  font-size: 0.95rem;
+}
+
+.primary-btn {
+  background: var(--accent);
+  color: #2a1500;
+  border: none;
+  border-radius: 10px;
+  padding: 0.65rem 1.1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.fab {
+  position: fixed;
+  right: 1.25rem;
+  bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #2a1500;
+  border: none;
+  font-size: 1.8rem;
+  line-height: 1;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+
+dialog {
+  border: none;
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--text);
+  padding: 1.25rem;
+  width: min(90vw, 360px);
+}
+
+dialog::backdrop {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.reward-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 1.5rem;
+}
+
+.reward-card {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  max-width: 90vw;
+}
+
+.reward-card img {
+  max-width: 100%;
+  max-height: 60vh;
+  border-radius: 10px;
+  display: block;
+}
+
+dialog h2 {
+  margin: 0 0 1rem;
+  font-size: 1.2rem;
+}
+
+dialog form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+dialog label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
+dialog input,
+dialog select {
+  background: #1c1c1e;
+  border: 1px solid #48484a;
+  border-radius: 8px;
+  padding: 0.55rem 0.6rem;
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 0.25rem;
+}
