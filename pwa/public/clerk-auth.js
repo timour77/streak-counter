@@ -46,13 +46,20 @@ export async function initAuth() {
   authLoading.classList.add("hidden");
 
   return new Promise((resolve) => {
+    let settled = false;
+    let pollHandle = null;
+
     function render() {
       if (window.Clerk.isSignedIn) {
         signInContainer.classList.add("hidden");
         appContent.classList.remove("hidden");
         userButtonContainer.innerHTML = "";
         window.Clerk.mountUserButton(userButtonContainer);
-        resolve({ getToken: () => window.Clerk.session.getToken() });
+        if (!settled) {
+          settled = true;
+          if (pollHandle) clearInterval(pollHandle);
+          resolve({ getToken: () => window.Clerk.session.getToken() });
+        }
       } else {
         appContent.classList.add("hidden");
         userButtonContainer.innerHTML = "";
@@ -65,7 +72,17 @@ export async function initAuth() {
         }
       }
     }
+
     render();
     window.Clerk.addListener(render);
+
+    // Clerk's dev instance syncs sessions across the cross-origin *.accounts.dev
+    // domain via a querystring token instead of a real cookie (Safari blocks
+    // third-party cookies). That handshake can complete server-side without
+    // addListener firing in this tab — a short poll is a cheap safety net so
+    // the app notices within a couple seconds instead of needing a reload.
+    pollHandle = setInterval(() => {
+      if (!settled && window.Clerk.isSignedIn) render();
+    }, 1200);
   });
 }
