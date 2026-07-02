@@ -18,19 +18,23 @@ function emptyStore() {
 let redisClient;
 let redisAttempted = false;
 
+// The Vercel Marketplace "Upstash for Redis" integration injects KV_REST_API_URL
+// / KV_REST_API_TOKEN (legacy Vercel KV naming), not Upstash's own
+// UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN — checking both makes this
+// work whether the store was connected via the KV integration or plain Upstash.
+const REDIS_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+const REDIS_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+
 async function getRedis() {
   if (redisAttempted) return redisClient;
   redisAttempted = true;
-  // Redis.fromEnv() doesn't throw when the env vars are missing — it only fails
-  // later, on the first actual command. Check explicitly instead so local dev
-  // (no Upstash configured) falls back to the file store instead of crashing.
-  if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+  if (!REDIS_URL || !REDIS_TOKEN) {
     redisClient = null;
     return redisClient;
   }
   try {
     const { Redis } = await import("@upstash/redis");
-    redisClient = Redis.fromEnv();
+    redisClient = new Redis({ url: REDIS_URL, token: REDIS_TOKEN });
   } catch {
     redisClient = null;
   }
