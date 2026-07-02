@@ -23,6 +23,11 @@ function loadScript(src, attrs = {}) {
 
 export async function initAuth() {
   const authLoading = document.getElementById("auth-loading");
+  // mountSignIn() mutates its target element's own class attribute (replaces it
+  // with Clerk's internal classes), which silently wipes out any layout class
+  // applied directly to that element. Mounting into an inner div and doing our
+  // own hidden/visible + centering on an outer wrapper avoids that entirely.
+  const signInWrapper = document.getElementById("sign-in-wrapper");
   const signInContainer = document.getElementById("sign-in-container");
   const appContent = document.getElementById("app-content");
   const userButtonContainer = document.getElementById("user-button-container");
@@ -51,7 +56,7 @@ export async function initAuth() {
 
     function render() {
       if (window.Clerk.isSignedIn) {
-        signInContainer.classList.add("hidden");
+        signInWrapper.classList.add("hidden");
         appContent.classList.remove("hidden");
         userButtonContainer.innerHTML = "";
         window.Clerk.mountUserButton(userButtonContainer);
@@ -63,7 +68,7 @@ export async function initAuth() {
       } else {
         appContent.classList.add("hidden");
         userButtonContainer.innerHTML = "";
-        signInContainer.classList.remove("hidden");
+        signInWrapper.classList.remove("hidden");
         if (!signInContainer.hasChildNodes()) {
           // withSignUp gives a single unified sign-in-or-up flow within this one
           // mounted component, instead of SignIn's default "Sign up" link, which
