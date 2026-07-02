@@ -58,7 +58,10 @@ export async function initAuth() {
         userButtonContainer.innerHTML = "";
         signInContainer.classList.remove("hidden");
         if (!signInContainer.hasChildNodes()) {
-          window.Clerk.mountSignIn(signInContainer);
+          // withSignUp gives a single unified sign-in-or-up flow within this one
+          // mounted component, instead of SignIn's default "Sign up" link, which
+          // navigates away to Clerk's separately hosted Account Portal.
+          window.Clerk.mountSignIn(signInContainer, { withSignUp: true });
         }
       }
     }
