@@ -3,12 +3,12 @@ import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 
-import vapidPublicKeyHandler from "./api/vapid-public-key.js";
-import subscribeHandler from "./api/subscribe.js";
-import syncHandler from "./api/sync.js";
-import testNotificationHandler from "./api/test-notification.js";
-import rewardGifHandler from "./api/reward-gif.js";
-import cronHandler from "./api/cron.js";
+import vapidPublicKeyHandler from "./routes/vapid-public-key.js";
+import subscribeHandler from "./routes/subscribe.js";
+import syncHandler from "./routes/sync.js";
+import testNotificationHandler from "./routes/test-notification.js";
+import rewardGifHandler from "./routes/reward-gif.js";
+import cronHandler from "./routes/cron.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, "public");
@@ -19,9 +19,10 @@ if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
   process.exit(1);
 }
 
-// This server exists for local development only. In production (Vercel), each
-// file in api/ is deployed as its own serverless function instead — mounting
-// the exact same handlers here means there's only one copy of the route logic.
+// Vercel deploys this file directly as a single Function (zero-config Express
+// support), so the same app.js runs unchanged in both dev and prod. In prod,
+// Vercel's CDN serves public/** directly and express.static() here is a no-op;
+// locally there's no CDN, so it's what actually serves the frontend.
 const app = express();
 app.use(express.json());
 app.use(express.static(PUBLIC_DIR));
