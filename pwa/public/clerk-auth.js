@@ -21,6 +21,11 @@ function loadScript(src, attrs = {}) {
   });
 }
 
+// Hides the "hidden" appearance elements below: Clerk merges a string value in
+// `appearance.elements` in as an extra class on that element, and styles.css
+// defines a real `.hidden { display: none }`, so this piggybacks on that.
+const HIDE_HEADER_APPEARANCE = { elements: { header: "hidden" } };
+
 export async function initAuth() {
   const authLoading = document.getElementById("auth-loading");
   // mountSignIn() mutates its target element's own class attribute (replaces it
@@ -50,44 +55,52 @@ export async function initAuth() {
   await window.Clerk.load({ ui: { ClerkUI: window.__internal_ClerkUICtor } });
   authLoading.classList.add("hidden");
 
-  return new Promise((resolve) => {
-    let settled = false;
-    let pollHandle = null;
+  const wasSignedIn = window.Clerk.isSignedIn;
 
-    function render() {
-      if (window.Clerk.isSignedIn) {
-        signInWrapper.classList.add("hidden");
-        appContent.classList.remove("hidden");
-        userButtonContainer.innerHTML = "";
-        window.Clerk.mountUserButton(userButtonContainer);
-        if (!settled) {
-          settled = true;
-          if (pollHandle) clearInterval(pollHandle);
-          resolve({ getToken: () => window.Clerk.session.getToken() });
-        }
-      } else {
-        appContent.classList.add("hidden");
-        userButtonContainer.innerHTML = "";
-        signInWrapper.classList.remove("hidden");
-        if (!signInContainer.hasChildNodes()) {
-          // withSignUp gives a single unified sign-in-or-up flow within this one
-          // mounted component, instead of SignIn's default "Sign up" link, which
-          // navigates away to Clerk's separately hosted Account Portal.
-          window.Clerk.mountSignIn(signInContainer, { withSignUp: true });
-        }
-      }
-    }
-
-    render();
-    window.Clerk.addListener(render);
-
-    // Clerk's dev instance syncs sessions across the cross-origin *.accounts.dev
-    // domain via a querystring token instead of a real cookie (Safari blocks
-    // third-party cookies). That handshake can complete server-side without
-    // addListener firing in this tab — a short poll is a cheap safety net so
-    // the app notices within a couple seconds instead of needing a reload.
-    pollHandle = setInterval(() => {
-      if (!settled && window.Clerk.isSignedIn) render();
-    }, 1200);
+  // This shell has no framework bindings to reactively re-render when auth state
+  // flips underneath it, and Clerk's dev-instance cross-origin (*.accounts.dev)
+  // session handshake doesn't even notify this tab's in-memory client without an
+  // explicit refetch. Reloading on any change is what Clerk's own docs recommend
+  // for non-framework sign-out flows, and it's what already works today when
+  // reloading manually — so do it automatically instead of trying to patch the
+  // DOM in place (which previously left both sign-in and sign-out needing a
+  // manual refresh to take effect).
+  window.Clerk.addListener(({ session }) => {
+    if (Boolean(session) !== wasSignedIn) window.location.reload();
   });
+
+  if (wasSignedIn) {
+    signInWrapper.classList.add("hidden");
+    appContent.classList.remove("hidden");
+    window.Clerk.mountUserButton(userButtonContainer);
+    return { getToken: () => window.Clerk.session.getToken() };
+  }
+
+  appContent.classList.add("hidden");
+  signInWrapper.classList.remove("hidden");
+  // withSignUp gives a single unified sign-in-or-up flow within this one
+  // mounted component, instead of SignIn's default "Sign up" link, which
+  // navigates away to Clerk's separately hosted Account Portal.
+  window.Clerk.mountSignIn(signInContainer, { withSignUp: true, appearance: HIDE_HEADER_APPEARANCE });
+
+  // addListener alone doesn't reliably fire for the cross-origin dev-instance
+  // handshake above, so poll a real client refetch as a safety net — checking
+  // window.Clerk.isSignedIn alone isn't enough since that flag is exactly what
+  // fails to update without a refetch.
+  const pollHandle = setInterval(async () => {
+    try {
+      await window.Clerk.client.reload();
+    } catch {
+      return; // offline — try again next tick
+    }
+    if (window.Clerk.isSignedIn) {
+      clearInterval(pollHandle);
+      window.location.reload();
+    }
+  }, 1500);
+
+  // Intentionally never resolves: the page reloads once sign-in completes
+  // (above), and the reloaded page's initAuth() resolves immediately since
+  // Clerk now reports the user as signed in.
+  return new Promise(() => {});
 }
