@@ -66,6 +66,12 @@ export async function initAuth() {
   // DOM in place (which previously left both sign-in and sign-out needing a
   // manual refresh to take effect).
   window.Clerk.addListener(({ session }) => {
+    // Clerk emits `session: undefined` as a transient "still loading" state
+    // during routine background token refreshes, distinct from `null` (truly
+    // signed out) — treating it as a change caused spurious reloads for
+    // already-signed-in users, which could race with and cancel a real
+    // sign-out's network call before the session was actually revoked.
+    if (session === undefined) return;
     if (Boolean(session) !== wasSignedIn) window.location.reload();
   });
 
