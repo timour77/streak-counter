@@ -1,4 +1,4 @@
-const CACHE_NAME = "streaks-cache-v1";
+const CACHE_NAME = "streaks-cache-v2";
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -24,19 +24,20 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
+  // Network-first: a stale app shell/auth script silently keeps running old
+  // logic indefinitely (the previous cache-first + background-revalidate
+  // strategy left users stuck on old JS across deploys). Only fall back to
+  // the cache when there's truly no network, for offline support.
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      const network = fetch(event.request)
-        .then((response) => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          }
-          return response;
-        })
-        .catch(() => cached);
-      return cached || network;
-    })
+    fetch(event.request)
+      .then((response) => {
+        if (response.ok) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        }
+        return response;
+      })
+      .catch(() => caches.match(event.request))
   );
 });
 
